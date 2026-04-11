@@ -1,0 +1,36 @@
+{
+  "name": "traveris2-back",
+  "version": "2.0.0",
+  "description": "Traveris Pro v2 — Backend API SaaS multi-tenant para agencias de viajes",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "migrate": "node src/migrate.js",
+    "seed": "node src/seeds/adminInicial.js"
+  },
+  "keywords": ["traveris", "travel", "agency", "saas"],
+  "author": "Pedro Agüero",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1019.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.2",
+    "multer-s3": "^3.0.1",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^8.0.1",
+    "pg": "^8.18.0",
+    "uuid": "^13.0.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
