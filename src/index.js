@@ -113,6 +113,27 @@ app.get('/probar-conexion', async (req, res) => {
   }
 });
 
+app.get('/diagnostico', async (req, res) => {
+  try {
+    const dbTest = await pool.query('SELECT COUNT(*) as count FROM usuarios');
+    const bcrypt = require('bcrypt');
+    const hash = await bcrypt.hash('test', 10);
+    const valid = await bcrypt.compare('test', hash);
+    const { z } = require('zod');
+    const schema = z.object({ test: z.string() });
+    const parsed = schema.safeParse({ test: 'ok' });
+    res.json({
+      db_usuarios: dbTest.rows[0].count,
+      bcrypt_ok: valid,
+      zod_ok: parsed.success,
+      node_version: process.version,
+      env_jwt: !!process.env.JWT_SECRET
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack?.substring(0, 300) });
+  }
+});
+
 // ─── MANEJADORES GLOBALES DE ERRORES ─────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('❌ Error general interceptado:', err.stack);
