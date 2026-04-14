@@ -63,6 +63,29 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/reservas/proximos-vencimientos — Reservas con fecha límite próxima
+// ⚠️ MUST be before /:id to prevent Express from matching 'proximos-vencimientos' as an :id
+router.get('/proximos-vencimientos', async (req, res) => {
+  try {
+    const empresa = req.usuario.empresa_nombre;
+    const result = await pool.query(
+      `SELECT r.*, c.nombre_completo AS titular_nombre
+       FROM reservas r
+       JOIN clientes c ON r.id_titular = c.id
+       WHERE r.empresa_nombre = $1 AND r.estado_eliminado = FALSE
+         AND r.estado = 'ABIERTO'
+         AND r.fecha_limite_pago IS NOT NULL
+         AND r.fecha_limite_pago <= CURRENT_DATE + INTERVAL '7 days'
+       ORDER BY r.fecha_limite_pago ASC`,
+      [empresa]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error obteniendo vencimientos:', err);
+    res.status(500).json({ error: 'Error al obtener vencimientos' });
+  }
+});
+
 // GET /api/reservas/cliente/:idCliente — Reservas de un cliente
 router.get('/cliente/:idCliente', async (req, res) => {
   try {
@@ -152,7 +175,12 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/reservas — Crear reserva con pasajeros y vuelos
 router.post('/', async (req, res) => {
-  const parsed = reservaSchema.safeParse(req.body);
+  // Convert empty strings to null
+  const body = { ...req.body };
+  for (const key of Object.keys(body)) {
+    if (body[key] === '' || body[key] === undefined) body[key] = null;
+  }
+  const parsed = reservaSchema.safeParse(body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Datos inválidos', detalles: parsed.error.errors });
   }
@@ -171,9 +199,9 @@ router.post('/', async (req, res) => {
         estado, fecha_limite_pago)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING *`,
-      [data.id_titular, data.destino_final, data.fecha_viaje_salida, data.fecha_viaje_regreso,
-       data.operador_mayorista, data.nro_expediente_operador, empresa,
-       data.observaciones_internas, data.estado || 'ABIERTO', data.fecha_limite_pago]
+      [data.id_titular, data.destino_final || null, data.fecha_viaje_salida || null, data.fecha_viaje_regreso || null,
+       data.operador_mayorista || null, data.nro_expediente_operador || null, empresa,
+       data.observaciones_internas || null, data.estado || 'ABIERTO', data.fecha_limite_pago || null]
     );
 
     const idReserva = reserva.rows[0].id;
@@ -218,7 +246,7 @@ router.post('/', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('❌ Error creando reserva:', err);
-    res.status(500).json({ error: 'Error al crear reserva' });
+    res.status(500).json({ error: 'Error al crear reserva', detalle: err.message });
   } finally {
     client.release();
   }
@@ -226,7 +254,12 @@ router.post('/', async (req, res) => {
 
 // PUT /api/reservas/:id — Actualizar reserva (in-place, no destructivo)
 router.put('/:id', async (req, res) => {
-  const parsed = reservaUpdateSchema.safeParse(req.body);
+  // Convert empty strings to null
+  const body = { ...req.body };
+  for (const key of Object.keys(body)) {
+    if (typeof body[key] === 'string' && body[key].trim() === '') body[key] = null;
+  }
+  const parsed = reservaUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Datos inválidos', detalles: parsed.error.errors });
   }
@@ -313,6 +346,21 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/reservas/todos — Soft delete all
+router.delete('/todos', async (req, res) => {
+  try {
+    const empresa = req.usuario.empresa_nombre;
+    const result = await pool.query(
+      'UPDATE reservas SET estado_eliminado = TRUE WHERE empresa_nombre = $1 AND estado_eliminado = FALSE RETURNING id',
+      [empresa]
+    );
+    res.json({ mensaje: `${result.rowCount} reservas eliminadas` });
+  } catch (err) {
+    console.error('❌ Error eliminando todas las reservas:', err);
+    res.status(500).json({ error: 'Error al eliminar reservas' });
+  }
+});
+
 // DELETE /api/reservas/:id — Soft delete
 router.delete('/:id', async (req, res) => {
   try {
@@ -340,39 +388,20 @@ router.post('/:id/archivos', uploadArchivos.single('archivo'), async (req, res) 
       return res.status(400).json({ error: 'No se recibió archivo' });
     }
 
+    // Support both S3 (location/key) and local (path/filename) storage
+    const rutaArchivo = req.file.location || req.file.key || `/uploads/reservas/${req.file.filename}`;
+
     const result = await pool.query(
       `INSERT INTO reserva_archivos (id_reserva, nombre_archivo, ruta_archivo, tipo_archivo)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [parseInt(req.params.id, 10), req.file.originalname, req.file.location || req.file.key, req.file.mimetype]
+      [parseInt(req.params.id, 10), req.file.originalname, rutaArchivo, req.file.mimetype]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('❌ Error subiendo archivo de reserva:', err);
-    res.status(500).json({ error: 'Error al subir archivo' });
-  }
-});
-
-// GET /api/reservas/proximos-vencimientos — Reservas con fecha límite próxima
-router.get('/proximos-vencimientos', async (req, res) => {
-  try {
-    const empresa = req.usuario.empresa_nombre;
-    const result = await pool.query(
-      `SELECT r.*, c.nombre_completo AS titular_nombre
-       FROM reservas r
-       JOIN clientes c ON r.id_titular = c.id
-       WHERE r.empresa_nombre = $1 AND r.estado_eliminado = FALSE
-         AND r.estado = 'ABIERTO'
-         AND r.fecha_limite_pago IS NOT NULL
-         AND r.fecha_limite_pago <= CURRENT_DATE + INTERVAL '7 days'
-       ORDER BY r.fecha_limite_pago ASC`,
-      [empresa]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Error obteniendo vencimientos:', err);
-    res.status(500).json({ error: 'Error al obtener vencimientos' });
+    res.status(500).json({ error: 'Error al subir archivo', detalle: err.message });
   }
 });
 

@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const { verificarToken } = require('./middlewares/auth');
 const { verificarAdmin } = require('./middlewares/admin');
+const { resolverEmpresa } = require('./middlewares/resolverEmpresa');
 const { seedAdminInicial } = require('./seeds/adminInicial');
 
 // Importar rutas
@@ -84,18 +85,18 @@ app.get('/api/caja/cotizaciones-completas', (req, res, next) => {
 });
 
 // ─── RUTAS PROTEGIDAS (con JWT) ─────────────────────────────────────────────
-app.use('/api/admin', verificarToken, verificarAdmin, adminRoutes);
-app.use('/api/clientes', verificarToken, clientesRoutes);
-app.use('/api/proveedores', verificarToken, proveedoresRoutes);
-app.use('/api/reservas', verificarToken, reservasRoutes);
-app.use('/api/servicios', verificarToken, serviciosRoutes);
-app.use('/api/deudas', verificarToken, deudasRoutes);
-app.use('/api/pagos', verificarToken, pagosRoutes);
-app.use('/api/metodos-pago', verificarToken, metodosPagoRoutes);
-app.use('/api/tarjetas', verificarToken, tarjetasRoutes);
-app.use('/api/recibos', verificarToken, recibosRoutes); // JWT OBLIGATORIO (bug corregido)
-app.use('/api/caja', verificarToken, cajaRoutes);
-app.use('/api/import-clientes', verificarToken, importClientesRoutes);
+app.use('/api/admin', verificarToken, verificarAdmin, resolverEmpresa, adminRoutes);
+app.use('/api/clientes', verificarToken, resolverEmpresa, clientesRoutes);
+app.use('/api/proveedores', verificarToken, resolverEmpresa, proveedoresRoutes);
+app.use('/api/reservas', verificarToken, resolverEmpresa, reservasRoutes);
+app.use('/api/servicios', verificarToken, resolverEmpresa, serviciosRoutes);
+app.use('/api/deudas', verificarToken, resolverEmpresa, deudasRoutes);
+app.use('/api/pagos', verificarToken, resolverEmpresa, pagosRoutes);
+app.use('/api/metodos-pago', verificarToken, resolverEmpresa, metodosPagoRoutes);
+app.use('/api/tarjetas', verificarToken, resolverEmpresa, tarjetasRoutes);
+app.use('/api/recibos', verificarToken, resolverEmpresa, recibosRoutes);
+app.use('/api/caja', verificarToken, resolverEmpresa, cajaRoutes);
+app.use('/api/import-clientes', verificarToken, resolverEmpresa, importClientesRoutes);
 
 // ─── RUTA DE PRUEBA ─────────────────────────────────────────────────────────
 app.get('/', (req, res) => {

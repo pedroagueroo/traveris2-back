@@ -26,7 +26,12 @@ router.get('/reserva/:id', async (req, res) => {
 
 // POST /api/servicios — Crear servicio + 2 deudas (transacción atómica)
 router.post('/', async (req, res) => {
-  const parsed = servicioSchema.safeParse(req.body);
+  // Convert empty strings to null for optional fields
+  const body = { ...req.body };
+  for (const key of Object.keys(body)) {
+    if (body[key] === '' || body[key] === undefined) body[key] = null;
+  }
+  const parsed = servicioSchema.safeParse(body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Datos inválidos', detalles: parsed.error.errors });
   }
@@ -121,7 +126,12 @@ router.post('/', async (req, res) => {
 
 // PUT /api/servicios/:id — Actualizar servicio + ajustar deudas
 router.put('/:id', async (req, res) => {
-  const parsed = servicioUpdateSchema.safeParse(req.body);
+  // Convert empty strings to null for optional fields
+  const body = { ...req.body };
+  for (const key of Object.keys(body)) {
+    if (body[key] === '' || body[key] === undefined) body[key] = null;
+  }
+  const parsed = servicioUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Datos inválidos', detalles: parsed.error.errors });
   }

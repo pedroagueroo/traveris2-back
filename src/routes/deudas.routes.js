@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// GET /api/deudas/reserva/:id/proveedores — Agrupado por (proveedor, moneda)
+// GET /api/deudas/reserva/:id/proveedores — Detalle por servicio individual
 router.get('/reserva/:id/proveedores', async (req, res) => {
   try {
     const empresa = req.usuario.empresa_nombre;
@@ -13,17 +13,23 @@ router.get('/reserva/:id/proveedores', async (req, res) => {
 
     const result = await pool.query(
       `SELECT
+        d.id,
+        d.id_servicio,
         d.id_proveedor,
+        s.tipo_servicio,
+        s.descripcion,
+        COALESCE(s.hotel_nombre, s.vuelo_aerolinea, s.asistencia_compania,
+                 s.crucero_naviera, s.visa_pais, s.descripcion) AS servicio_nombre,
         p.nombre_comercial AS proveedor_nombre,
         d.moneda,
-        SUM(d.monto_total) AS deuda_total,
-        SUM(d.monto_pagado) AS pagado_total,
-        SUM(d.monto_total) - SUM(d.monto_pagado) AS saldo
+        d.monto_total AS deuda_total,
+        d.monto_pagado AS pagado_total,
+        d.monto_total - d.monto_pagado AS saldo
        FROM deudas_servicio d
+       JOIN reserva_servicios_detallados s ON d.id_servicio = s.id
        LEFT JOIN proveedores p ON d.id_proveedor = p.id
        WHERE d.id_reserva = $1 AND d.empresa_nombre = $2 AND d.tipo = 'PROVEEDOR'
-       GROUP BY d.id_proveedor, p.nombre_comercial, d.moneda
-       ORDER BY p.nombre_comercial ASC, d.moneda ASC`,
+       ORDER BY p.nombre_comercial ASC, s.created_at ASC`,
       [idReserva, empresa]
     );
 

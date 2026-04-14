@@ -154,6 +154,24 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/clientes/todos — Eliminar todos los clientes
+router.delete('/todos', async (req, res) => {
+  try {
+    const empresa = req.usuario.empresa_nombre;
+    const result = await pool.query(
+      'DELETE FROM clientes WHERE empresa_nombre = $1 RETURNING id',
+      [empresa]
+    );
+    res.json({ mensaje: `${result.rowCount} clientes eliminados` });
+  } catch (err) {
+    console.error('❌ Error eliminando todos los clientes:', err);
+    if (err.code === '23503') {
+      return res.status(400).json({ error: 'No se pueden eliminar: hay clientes con reservas asociadas. Elimine las reservas primero.' });
+    }
+    res.status(500).json({ error: 'Error al eliminar clientes' });
+  }
+});
+
 // DELETE /api/clientes/:id
 router.delete('/:id', async (req, res) => {
   try {
