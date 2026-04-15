@@ -138,6 +138,23 @@ async function iniciar() {
   // Seed admin inicial
   await seedAdminInicial();
 
+  // Seed tester account for demo purposes
+  try {
+    const bcrypt = require('bcrypt');
+    const exists = await pool.query("SELECT id FROM usuarios WHERE nombre_usuario = 'tester'");
+    if (exists.rows.length === 0) {
+      const hash = await bcrypt.hash('tester123', 10);
+      await pool.query(
+        `INSERT INTO usuarios (nombre_usuario, password_hash, rol, empresa_nombre, activo)
+         VALUES ('tester', $1, 'EMPRESA', 'pedro', true)`,
+        [hash]
+      );
+      console.log('✅ Usuario tester de prueba creado.');
+    }
+  } catch (e) {
+    console.log('ℹ️  Tester seed skip:', e.message);
+  }
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Traveris Pro v2 escuchando en puerto ${PORT}`);
   });
