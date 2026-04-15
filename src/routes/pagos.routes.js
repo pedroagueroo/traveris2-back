@@ -384,4 +384,59 @@ async function generarRecibo(client, pago, empresa) {
   );
 }
 
+// DELETE /api/pagos/:id — Eliminar movimiento permanentemente
+router.delete('/:id', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const empresa = req.usuario.empresa_nombre;
+    const id = parseInt(req.params.id, 10);
+
+    await client.query('BEGIN');
+
+    // Obtener el pago
+    const pagoResult = await client.query(
+      'SELECT * FROM pagos WHERE id = $1 AND empresa_nombre = $2',
+      [id, empresa]
+    );
+
+    if (pagoResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Movimiento no encontrado' });
+    }
+
+    const pago = pagoResult.rows[0];
+
+    // Si el pago tiene deuda asociada, revertir el saldo
+    if (pago.id_deuda && !pago.anulado) {
+      await client.query(
+        'UPDATE deudas_servicio SET monto_pagado = monto_pagado - $1 WHERE id = $2',
+        [Math.abs(pago.monto), pago.id_deuda]
+      );
+    }
+
+    // Si el pago consumió saldo de tarjeta-puente, devolverlo
+    if (pago.id_tarjeta_cliente && !pago.anulado) {
+      await client.query(
+        'UPDATE tarjetas_clientes SET monto_disponible = monto_disponible + $1 WHERE id = $2',
+        [Math.abs(pago.monto), pago.id_tarjeta_cliente]
+      );
+    }
+
+    // Eliminar recibos asociados
+    await client.query('DELETE FROM recibos WHERE id_pago = $1', [id]);
+
+    // Eliminar el pago
+    await client.query('DELETE FROM pagos WHERE id = $1', [id]);
+
+    await client.query('COMMIT');
+    res.json({ mensaje: 'Movimiento eliminado permanentemente' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error eliminando movimiento:', err);
+    res.status(500).json({ error: 'Error al eliminar movimiento' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
