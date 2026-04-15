@@ -422,6 +422,24 @@ router.delete('/:id', async (req, res) => {
       );
     }
 
+    // Si este pago creó tarjetas-puente (COBRO_CLIENTE con tarjeta), eliminarlas
+    // Primero: desvinculamos otros pagos que usaron esas tarjetas
+    const tarjetasCreadas = await client.query(
+      'SELECT id FROM tarjetas_clientes WHERE id_pago_origen = $1', [id]
+    );
+    if (tarjetasCreadas.rows.length > 0) {
+      const tarjetaIds = tarjetasCreadas.rows.map(t => t.id);
+      // Nullificar referencia en pagos que consumieron estas tarjetas
+      await client.query(
+        'UPDATE pagos SET id_tarjeta_cliente = NULL WHERE id_tarjeta_cliente = ANY($1)',
+        [tarjetaIds]
+      );
+      // Eliminar las tarjetas
+      await client.query(
+        'DELETE FROM tarjetas_clientes WHERE id_pago_origen = $1', [id]
+      );
+    }
+
     // Eliminar recibos asociados
     await client.query('DELETE FROM recibos WHERE id_pago = $1', [id]);
 
