@@ -38,16 +38,19 @@ app.use(helmet.crossOriginResourcePolicy({ policy: 'cross-origin' }));
 // ─── CORS ────────────────────────────────────────────────────────────────────
 const dominiosPermitidos = [
   process.env.FRONTEND_URL || 'https://traveris-pro.vercel.app',
+  'https://traveris2-front-z0froqk1f-pedroagueroos-projects.vercel.app',
   'http://localhost:4200'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || dominiosPermitidos.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('No permitido por CORS'));
-    }
+    if (!origin) return callback(null, true);
+    // Allow exact matches
+    if (dominiosPermitidos.indexOf(origin) !== -1) return callback(null, true);
+    // Allow any Vercel preview deployment for this project
+    if (origin.includes('pedroagueroos-projects.vercel.app')) return callback(null, true);
+    if (origin.includes('traveris') && origin.includes('vercel.app')) return callback(null, true);
+    callback(new Error('No permitido por CORS'));
   },
   credentials: true,
   optionsSuccessStatus: 200
