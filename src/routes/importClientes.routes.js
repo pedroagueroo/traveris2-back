@@ -171,7 +171,13 @@ function mapLegacyRow(row) {
   // Nacionalidad
   const nacionalidad = cleanStr(row['NACIONALIDAD']) || '';
 
+  // Legacy format: NOMB1 = apellido, NOMB2 = nombre(s)
+  const apellido = cleanStr(row['NOMB1']) || '';
+  const nombrePila = cleanStr(row['NOMB2']) || '';
+
   return {
+    apellido: apellido.toUpperCase(),
+    nombre: nombrePila.toUpperCase(),
     nombre_completo: nombre.toUpperCase(),
     dni_pasaporte: dni,
     email: email.toLowerCase(),
@@ -192,8 +198,19 @@ function mapLegacyRow(row) {
  * Mapea fila del formato ESTÁNDAR (columnas naturales)
  */
 function mapStandardRow(row) {
+  const fullName = cleanStr(row['Nombre Completo'] || row['nombre_completo'] || row['Nombre'] || row['NOMBRE'] || '').toUpperCase();
+  // Try to split into apellido + nombre if not provided separately
+  let nombre = cleanStr(row['Nombre'] || row['nombre'] || '').toUpperCase();
+  let apellido = cleanStr(row['Apellido'] || row['apellido'] || '').toUpperCase();
+  if (!nombre && !apellido && fullName) {
+    const parts = fullName.split(' ');
+    apellido = parts[0] || '';
+    nombre = parts.slice(1).join(' ') || '';
+  }
   return {
-    nombre_completo: cleanStr(row['Nombre Completo'] || row['nombre_completo'] || row['Nombre'] || row['NOMBRE'] || '').toUpperCase(),
+    nombre,
+    apellido,
+    nombre_completo: fullName || `${apellido} ${nombre}`.trim(),
     dni_pasaporte: cleanStr(row['DNI'] || row['dni_pasaporte'] || row['Documento'] || row['DNI/Pasaporte'] || ''),
     email: cleanStr(row['Email'] || row['email'] || row['E-mail'] || row['EMAIL'] || '').toLowerCase(),
     telefono: cleanPhone(row['Teléfono'] || row['telefono'] || row['Tel'] || row['Telefono'] || row['CELULAR'] || ''),
@@ -290,7 +307,7 @@ router.post('/confirmar', async (req, res) => {
     for (let i = 0; i < clientes.length; i++) {
       const c = clientes[i];
       try {
-        if (!c.nombre_completo) {
+        if (!c.nombre_completo && !c.nombre && !c.apellido) {
           errores++;
           detalleErrores.push({ fila: c.fila || i + 2, motivo: 'Nombre vacío' });
           continue;
@@ -306,21 +323,25 @@ router.post('/confirmar', async (req, res) => {
           if (existente.rows.length > 0) {
             await client.query(`
               UPDATE clientes SET
-                nombre_completo = $1,
-                email = CASE WHEN $2 = '' THEN email ELSE COALESCE($2, email) END,
-                telefono = CASE WHEN $3 = '' THEN telefono ELSE COALESCE($3, telefono) END,
-                fecha_nacimiento = COALESCE($4::date, fecha_nacimiento),
-                cuit_cuil = CASE WHEN $5 = '' THEN cuit_cuil ELSE COALESCE($5, cuit_cuil) END,
-                nacionalidad = CASE WHEN $6 = '' THEN nacionalidad ELSE COALESCE($6, nacionalidad) END,
-                pasaporte_nro = CASE WHEN $7 = '' THEN pasaporte_nro ELSE COALESCE($7, pasaporte_nro) END,
-                pasaporte_emision = COALESCE($8::date, pasaporte_emision),
-                pasaporte_vencimiento = COALESCE($9::date, pasaporte_vencimiento),
-                sexo = CASE WHEN $10 = '' THEN sexo ELSE COALESCE($10, sexo) END,
-                dni_vencimiento = COALESCE($11::date, dni_vencimiento),
-                dni_emision = COALESCE($12::date, dni_emision)
-              WHERE id = $13
+                nombre = COALESCE(NULLIF($1, ''), nombre),
+                apellido = COALESCE(NULLIF($2, ''), apellido),
+                nombre_completo = $3,
+                email = CASE WHEN $4 = '' THEN email ELSE COALESCE($4, email) END,
+                telefono = CASE WHEN $5 = '' THEN telefono ELSE COALESCE($5, telefono) END,
+                fecha_nacimiento = COALESCE($6::date, fecha_nacimiento),
+                cuit_cuil = CASE WHEN $7 = '' THEN cuit_cuil ELSE COALESCE($7, cuit_cuil) END,
+                nacionalidad = CASE WHEN $8 = '' THEN nacionalidad ELSE COALESCE($8, nacionalidad) END,
+                pasaporte_nro = CASE WHEN $9 = '' THEN pasaporte_nro ELSE COALESCE($9, pasaporte_nro) END,
+                pasaporte_emision = COALESCE($10::date, pasaporte_emision),
+                pasaporte_vencimiento = COALESCE($11::date, pasaporte_vencimiento),
+                sexo = CASE WHEN $12 = '' THEN sexo ELSE COALESCE($12, sexo) END,
+                dni_vencimiento = COALESCE($13::date, dni_vencimiento),
+                dni_emision = COALESCE($14::date, dni_emision)
+              WHERE id = $15
             `, [
-              c.nombre_completo,
+              c.nombre || '',
+              c.apellido || '',
+              c.nombre_completo || `${c.apellido || ''} ${c.nombre || ''}`.trim(),
               c.email || '',
               c.telefono || '',
               c.fecha_nacimiento || null,
@@ -342,12 +363,14 @@ router.post('/confirmar', async (req, res) => {
         // INSERTAR nuevo cliente
         await client.query(`
           INSERT INTO clientes (
-            nombre_completo, dni_pasaporte, email, telefono, fecha_nacimiento,
+            nombre, apellido, nombre_completo, dni_pasaporte, email, telefono, fecha_nacimiento,
             cuit_cuil, nacionalidad, pasaporte_nro, pasaporte_emision, pasaporte_vencimiento,
             sexo, empresa_nombre, dni_emision, dni_vencimiento
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
         `, [
-          c.nombre_completo,
+          c.nombre || '',
+          c.apellido || '',
+          c.nombre_completo || `${c.apellido || ''} ${c.nombre || ''}`.trim(),
           c.dni_pasaporte || null,
           c.email || null,
           c.telefono || null,

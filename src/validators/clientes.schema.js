@@ -4,7 +4,8 @@
 const { z } = require('zod');
 
 const clienteSchema = z.object({
-  nombre_completo: z.string().min(1, 'Nombre completo requerido').max(200),
+  nombre: z.string().min(1, 'Nombre requerido').max(200),
+  apellido: z.string().min(1, 'Apellido requerido').max(200),
   dni_pasaporte: z.string().max(50).optional().nullable(),
   email: z.string().email().max(100).optional().nullable().or(z.literal('')),
   telefono: z.string().max(50).optional().nullable(),

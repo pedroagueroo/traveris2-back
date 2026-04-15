@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
     const params = [empresa];
 
     if (busqueda) {
-      whereClause += ` AND (nombre_completo ILIKE $2 OR dni_pasaporte ILIKE $2 OR email ILIKE $2)`;
+      whereClause += ` AND (nombre ILIKE $2 OR apellido ILIKE $2 OR nombre_completo ILIKE $2 OR dni_pasaporte ILIKE $2 OR email ILIKE $2)`;
       params.push(`%${busqueda}%`);
     }
 
@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
     );
 
     const result = await pool.query(
-      `SELECT * FROM clientes ${whereClause} ORDER BY nombre_completo ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      `SELECT * FROM clientes ${whereClause} ORDER BY apellido ASC, nombre ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset]
     );
 
@@ -54,7 +54,7 @@ router.get('/todos', async (req, res) => {
   try {
     const empresa = req.usuario.empresa_nombre;
     const result = await pool.query(
-      'SELECT id, nombre_completo, dni_pasaporte, email, telefono FROM clientes WHERE empresa_nombre = $1 ORDER BY nombre_completo ASC',
+      'SELECT id, nombre, apellido, nombre_completo, dni_pasaporte, email, telefono FROM clientes WHERE empresa_nombre = $1 ORDER BY apellido ASC, nombre ASC',
       [empresa]
     );
     res.json(result.rows);
@@ -100,13 +100,14 @@ router.post('/', async (req, res) => {
   const empresa = req.usuario.empresa_nombre;
 
   try {
+    const nombreCompleto = `${data.apellido} ${data.nombre}`.trim();
     const result = await pool.query(
-      `INSERT INTO clientes (nombre_completo, dni_pasaporte, email, telefono, fecha_nacimiento,
+      `INSERT INTO clientes (nombre, apellido, nombre_completo, dni_pasaporte, email, telefono, fecha_nacimiento,
         cuit_cuil, nacionalidad, pasaporte_nro, pasaporte_emision, pasaporte_vencimiento,
         sexo, pref_asiento, pref_comida, observaciones_salud, empresa_nombre, dni_emision, dni_vencimiento)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING *`,
-      [data.nombre_completo, data.dni_pasaporte, data.email, data.telefono, data.fecha_nacimiento,
+      [data.nombre, data.apellido, nombreCompleto, data.dni_pasaporte, data.email, data.telefono, data.fecha_nacimiento,
        data.cuit_cuil, data.nacionalidad, data.pasaporte_nro, data.pasaporte_emision,
        data.pasaporte_vencimiento, data.sexo, data.pref_asiento, data.pref_comida,
        data.observaciones_salud, empresa, data.dni_emision, data.dni_vencimiento]
