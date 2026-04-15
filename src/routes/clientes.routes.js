@@ -154,21 +154,57 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/clientes/todos — Eliminar todos los clientes
+// DELETE /api/clientes/todos — Eliminar todos los clientes (y sus reservas)
 router.delete('/todos', async (req, res) => {
+  const client = await pool.connect();
   try {
     const empresa = req.usuario.empresa_nombre;
-    const result = await pool.query(
-      'DELETE FROM clientes WHERE empresa_nombre = $1 RETURNING id',
-      [empresa]
+    await client.query('BEGIN');
+
+    // 1. Obtener IDs de todas las reservas de esta empresa
+    const reservas = await client.query(
+      'SELECT id FROM reservas WHERE empresa_nombre = $1', [empresa]
     );
-    res.json({ mensaje: `${result.rowCount} clientes eliminados` });
-  } catch (err) {
-    console.error('❌ Error eliminando todos los clientes:', err);
-    if (err.code === '23503') {
-      return res.status(400).json({ error: 'No se pueden eliminar: hay clientes con reservas asociadas. Elimine las reservas primero.' });
+    const reservaIds = reservas.rows.map(r => r.id);
+
+    if (reservaIds.length > 0) {
+      // 2. Eliminar dependencias de reservas en cascada
+      await client.query(`DELETE FROM recibos WHERE id_reserva = ANY($1)`, [reservaIds]);
+      await client.query(`DELETE FROM pagos WHERE id_reserva = ANY($1)`, [reservaIds]);
+      await client.query(`DELETE FROM deudas_servicio WHERE id_reserva = ANY($1)`, [reservaIds]);
+      await client.query(`DELETE FROM servicios WHERE id_reserva = ANY($1)`, [reservaIds]);
+      await client.query(`DELETE FROM reserva_pasajeros WHERE id_reserva = ANY($1)`, [reservaIds]);
+      await client.query(`DELETE FROM reserva_vuelos WHERE id_reserva = ANY($1)`, [reservaIds]);
+      await client.query(`DELETE FROM reserva_archivos WHERE id_reserva = ANY($1)`, [reservaIds]);
+      // 3. Eliminar las reservas mismas
+      await client.query(`DELETE FROM reservas WHERE empresa_nombre = $1`, [empresa]);
     }
-    res.status(500).json({ error: 'Error al eliminar clientes' });
+
+    // 4. Eliminar archivos de clientes
+    const clienteIds = await client.query(
+      'SELECT id FROM clientes WHERE empresa_nombre = $1', [empresa]
+    );
+    const cIds = clienteIds.rows.map(c => c.id);
+    if (cIds.length > 0) {
+      await client.query(`DELETE FROM cliente_archivos WHERE id_cliente = ANY($1)`, [cIds]);
+    }
+
+    // 5. Eliminar tarjetas de clientes
+    await client.query(`DELETE FROM tarjetas_clientes WHERE empresa_nombre = $1`, [empresa]);
+
+    // 6. Finalmente eliminar los clientes
+    const result = await client.query(
+      'DELETE FROM clientes WHERE empresa_nombre = $1 RETURNING id', [empresa]
+    );
+
+    await client.query('COMMIT');
+    res.json({ mensaje: `${result.rowCount} clientes eliminados (y ${reservaIds.length} reservas asociadas)` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error eliminando todos los clientes:', err);
+    res.status(500).json({ error: 'Error al eliminar clientes: ' + err.message });
+  } finally {
+    client.release();
   }
 });
 
