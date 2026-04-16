@@ -160,15 +160,14 @@ router.get('/:id', async (req, res) => {
       [id]
     );
 
-    // Tarjetas (saldo a favor de esta reserva)
+    // Tarjetas (todas las de la empresa con saldo a favor)
     const tarjetas = await pool.query(
       `SELECT tc.*, prov.nombre_comercial AS proveedor_vinculado_nombre
        FROM tarjetas_clientes tc
-       JOIN pagos p ON tc.id_pago_origen = p.id
        LEFT JOIN proveedores prov ON tc.id_proveedor_vinculado = prov.id
-       WHERE p.id_reserva = $1 AND tc.monto_disponible > 0
+       WHERE tc.empresa_nombre = $1 AND tc.estado = 'ACTIVA' AND tc.monto_disponible > 0
        ORDER BY tc.fecha_cobro DESC`,
-      [id]
+      [empresa]
     );
 
     res.json({
