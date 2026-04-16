@@ -151,6 +151,29 @@ async function iniciar() {
       );
       console.log('✅ Usuario tester de prueba creado.');
     }
+
+    // Seed payment methods for tester empresa if missing
+    const mpCount = await pool.query("SELECT COUNT(*) FROM metodos_pago WHERE empresa_nombre = 'pedro'");
+    if (parseInt(mpCount.rows[0].count) === 0) {
+      const metodos = [
+        ['EFECTIVO', 'ARS', 'EFECTIVO'],
+        ['MERCADO_PAGO', 'ARS', 'TRANSFERENCIA'],
+        ['CUENTA_DNI', 'ARS', 'TRANSFERENCIA'],
+        ['BBVA_FRANCES', 'ARS', 'TRANSFERENCIA'],
+        ['NARANJA_X', 'ARS', 'TRANSFERENCIA'],
+        ['TARJETA', 'ARS', 'TARJETA'],
+        ['EFECTIVO', 'USD', 'EFECTIVO'],
+        ['TRANSFERENCIA_USD', 'USD', 'TRANSFERENCIA'],
+        ['EFECTIVO', 'EUR', 'EFECTIVO']
+      ];
+      for (const [nombre, moneda, tipo] of metodos) {
+        await pool.query(
+          `INSERT INTO metodos_pago (nombre, moneda, tipo, activo, empresa_nombre) VALUES ($1, $2, $3, true, 'pedro')`,
+          [nombre, moneda, tipo]
+        );
+      }
+      console.log('✅ Métodos de pago para tester creados.');
+    }
   } catch (e) {
     console.log('ℹ️  Tester seed skip:', e.message);
   }
