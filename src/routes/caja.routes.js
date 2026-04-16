@@ -119,8 +119,8 @@ router.get('/reporte-diario', async (req, res) => {
     // Totales del día por moneda
     const totales = await pool.query(
       `SELECT moneda,
-        COALESCE(SUM(CASE WHEN monto > 0 THEN monto ELSE 0 END), 0) AS ingresos,
-        COALESCE(SUM(CASE WHEN monto < 0 THEN ABS(monto) ELSE 0 END), 0) AS egresos
+        COALESCE(SUM(CASE WHEN tipo IN ('COBRO_CLIENTE', 'INGRESO_GENERAL') THEN monto ELSE 0 END), 0) AS ingresos,
+        COALESCE(SUM(CASE WHEN tipo IN ('PAGO_PROVEEDOR', 'EGRESO_GENERAL') THEN ABS(monto) ELSE 0 END), 0) AS egresos
        FROM pagos
        WHERE empresa_nombre = $1 AND DATE(fecha) = $2 AND anulado = FALSE
        GROUP BY moneda`,
