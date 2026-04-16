@@ -160,12 +160,24 @@ router.get('/:id', async (req, res) => {
       [id]
     );
 
+    // Tarjetas (saldo a favor de esta reserva)
+    const tarjetas = await pool.query(
+      `SELECT tc.*, prov.nombre_comercial AS proveedor_vinculado_nombre
+       FROM tarjetas_clientes tc
+       JOIN pagos p ON tc.id_pago_origen = p.id
+       LEFT JOIN proveedores prov ON tc.id_proveedor_vinculado = prov.id
+       WHERE p.id_reserva = $1 AND tc.monto_disponible > 0
+       ORDER BY tc.fecha_cobro DESC`,
+      [id]
+    );
+
     res.json({
       ...reserva.rows[0],
       pasajeros: pasajeros.rows,
       vuelos: vuelos.rows,
       servicios: servicios.rows,
-      archivos: archivos.rows
+      archivos: archivos.rows,
+      tarjetas: tarjetas.rows
     });
   } catch (err) {
     console.error('❌ Error obteniendo reserva:', err);
