@@ -151,11 +151,27 @@ router.post('/', async (req, res) => {
         return res.status(404).json({ error: 'Tarjeta no encontrada' });
       }
 
-      const disponible = parseFloat(tarjeta.rows[0].monto_disponible);
+      const t = tarjeta.rows[0];
+      const disponible = parseFloat(t.monto_disponible);
       if (disponible < Math.abs(data.monto)) {
         await client.query('ROLLBACK');
         return res.status(400).json({
           error: `Saldo insuficiente en tarjeta. Disponible: ${disponible}, Requerido: ${Math.abs(data.monto)}`
+        });
+      }
+
+      // Determinar proveedor: desde la deuda o desde data.id_proveedor
+      let idProveedorPago = data.id_proveedor || null;
+      if (!idProveedorPago && data.id_deuda) {
+        const deudaRow = await client.query('SELECT id_proveedor FROM deudas_servicio WHERE id = $1', [data.id_deuda]);
+        if (deudaRow.rows.length > 0) idProveedorPago = deudaRow.rows[0].id_proveedor;
+      }
+
+      // Validar vinculación: la tarjeta solo puede usarse con el proveedor ya vinculado (o si no tiene ninguno)
+      if (t.id_proveedor_vinculado && idProveedorPago && t.id_proveedor_vinculado !== idProveedorPago) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'Esta tarjeta está vinculada a otro proveedor y no puede usarse para este pago.'
         });
       }
 
@@ -165,17 +181,20 @@ router.post('/', async (req, res) => {
           tipo, moneda, monto, metodo_pago_id, id_tarjeta_cliente, observaciones, empresa_nombre)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          RETURNING *`,
-        [data.id_reserva, data.id_servicio, data.id_deuda, data.id_proveedor,
+        [data.id_reserva, data.id_servicio, data.id_deuda, idProveedorPago,
          data.id_cliente, data.tipo, data.moneda, data.monto, data.metodo_pago_id,
          idTarjetaCliente, data.observaciones, empresa]
       );
 
-      // UPDATE tarjeta disponible
+      // UPDATE tarjeta disponible + vincular al proveedor si no lo estaba
       const nuevoDisponible = disponible - Math.abs(data.monto);
       const nuevoEstado = nuevoDisponible <= 0 ? 'CONSUMIDA' : 'ACTIVA';
       await client.query(
-        'UPDATE tarjetas_clientes SET monto_disponible = $1, estado = $2 WHERE id = $3',
-        [Math.max(0, nuevoDisponible), nuevoEstado, idTarjetaCliente]
+        `UPDATE tarjetas_clientes
+         SET monto_disponible = $1, estado = $2,
+             id_proveedor_vinculado = COALESCE(id_proveedor_vinculado, $4)
+         WHERE id = $3`,
+        [Math.max(0, nuevoDisponible), nuevoEstado, idTarjetaCliente, idProveedorPago]
       );
 
       // UPDATE deuda

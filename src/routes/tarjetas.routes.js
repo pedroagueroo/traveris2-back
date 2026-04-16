@@ -5,20 +5,45 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// GET /api/tarjetas/disponibles — Tarjetas con saldo > 0
+// GET /api/tarjetas/disponibles — Tarjetas con saldo > 0 (all)
 router.get('/disponibles', async (req, res) => {
   try {
     const empresa = req.usuario.empresa_nombre;
     const result = await pool.query(
-      `SELECT * FROM tarjetas_clientes
-       WHERE empresa_nombre = $1 AND estado = 'ACTIVA' AND monto_disponible > 0
-       ORDER BY fecha_cobro DESC`,
+      `SELECT tc.*, p.nombre_comercial AS proveedor_vinculado_nombre
+       FROM tarjetas_clientes tc
+       LEFT JOIN proveedores p ON tc.id_proveedor_vinculado = p.id
+       WHERE tc.empresa_nombre = $1 AND tc.estado = 'ACTIVA' AND tc.monto_disponible > 0
+       ORDER BY tc.fecha_cobro DESC`,
       [empresa]
     );
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Error listando tarjetas:', err);
     res.status(500).json({ error: 'Error al listar tarjetas disponibles' });
+  }
+});
+
+// GET /api/tarjetas/disponibles/proveedor/:idProveedor — Tarjetas vinculadas a un proveedor específico (o sin vincular)
+router.get('/disponibles/proveedor/:idProveedor', async (req, res) => {
+  try {
+    const empresa = req.usuario.empresa_nombre;
+    const idProveedor = parseInt(req.params.idProveedor, 10);
+    const result = await pool.query(
+      `SELECT tc.*, p.nombre_comercial AS proveedor_vinculado_nombre
+       FROM tarjetas_clientes tc
+       LEFT JOIN proveedores p ON tc.id_proveedor_vinculado = p.id
+       WHERE tc.empresa_nombre = $1
+         AND tc.estado = 'ACTIVA'
+         AND tc.monto_disponible > 0
+         AND (tc.id_proveedor_vinculado IS NULL OR tc.id_proveedor_vinculado = $2)
+       ORDER BY tc.id_proveedor_vinculado DESC NULLS LAST, tc.fecha_cobro DESC`,
+      [empresa, idProveedor]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error listando tarjetas por proveedor:', err);
+    res.status(500).json({ error: 'Error al listar tarjetas por proveedor' });
   }
 });
 
