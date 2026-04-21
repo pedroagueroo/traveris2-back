@@ -403,6 +403,145 @@ async function generarRecibo(client, pago, empresa) {
   );
 }
 
+// POST /api/pagos/multiples — Transacción atómica de múltiples pagos (generando un único recibo)
+router.post('/multiples', async (req, res) => {
+  if (!Array.isArray(req.body) || req.body.length === 0) {
+    return res.status(400).json({ error: 'Se requiere un arreglo de pagos' });
+  }
+
+  const empresa = req.usuario.empresa_nombre;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    
+    let pagosInsertados = [];
+    let sumatoriaMonedas = {};
+    let concepto = "Pago múltiple agrupado:\n";
+    let idReserva = null;
+    let idCliente = null;
+
+    for (let rawData of req.body) {
+      if (rawData.tipo !== 'COBRO_CLIENTE') {
+        throw new Error('Solo se permiten registrar COBRO_CLIENTE en Pagos Múltiples');
+      }
+
+      // Coerción de tipos — Angular envía strings desde inputs de formulario
+      if (rawData.monto !== undefined && rawData.monto !== null) rawData.monto = parseFloat(rawData.monto);
+      if (rawData.metodo_pago_id !== undefined && rawData.metodo_pago_id !== null) rawData.metodo_pago_id = parseInt(rawData.metodo_pago_id, 10) || null;
+      if (rawData.id_reserva !== undefined && rawData.id_reserva !== null) rawData.id_reserva = parseInt(rawData.id_reserva, 10) || null;
+      if (rawData.id_servicio !== undefined && rawData.id_servicio !== null) rawData.id_servicio = parseInt(rawData.id_servicio, 10) || null;
+      if (rawData.id_deuda !== undefined && rawData.id_deuda !== null) rawData.id_deuda = parseInt(rawData.id_deuda, 10) || null;
+      if (rawData.id_cliente !== undefined && rawData.id_cliente !== null) rawData.id_cliente = parseInt(rawData.id_cliente, 10) || null;
+
+      const parsed = pagoSchema.safeParse(rawData);
+      if (!parsed.success) {
+        console.error('❌ Validación fallida:', JSON.stringify(parsed.error.issues), 'Data:', JSON.stringify(rawData));
+        throw new Error('Datos inválidos en uno de los pagos: ' + parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+      }
+      
+      const data = parsed.data;
+      idReserva = data.id_reserva;
+      idCliente = data.id_cliente;
+
+      let idTarjetaCliente = null;
+
+      if (data.tarjeta) {
+        const cleanly = data.tarjeta.numero.replace(/\s/g, '');
+        const mask = cleanly.substring(0, 6) + '****' + cleanly.substring(cleanly.length - 4);
+        const banco = detectarBancoPorBIN(data.tarjeta.numero);
+
+        const pago = await client.query(
+          `INSERT INTO pagos (id_reserva, id_servicio, id_deuda, id_proveedor, id_cliente,
+            tipo, moneda, monto, metodo_pago_id, id_tarjeta_cliente, observaciones, empresa_nombre)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,$10,$11) RETURNING *`,
+          [data.id_reserva, data.id_servicio, data.id_deuda, data.id_proveedor,
+           data.id_cliente, data.tipo, data.moneda, data.monto, data.metodo_pago_id,
+           data.observaciones, empresa]
+        );
+        const idPago = pago.rows[0].id;
+        
+        const tarjeta = await client.query(
+          `INSERT INTO tarjetas_clientes (titular, numero_mask, expiracion, banco_detectado,
+            moneda, monto_original, monto_disponible, id_pago_origen, empresa_nombre)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+          [data.tarjeta.titular, mask, data.tarjeta.expiracion, banco,
+           data.moneda, data.monto, data.monto, idPago, empresa]
+        );
+        
+        idTarjetaCliente = tarjeta.rows[0].id;
+        await client.query('UPDATE pagos SET id_tarjeta_cliente = $1 WHERE id = $2', [idTarjetaCliente, idPago]);
+        pagosInsertados.push(pago.rows[0]);
+      } else {
+        const pago = await client.query(
+          `INSERT INTO pagos (id_reserva, id_servicio, id_deuda, id_proveedor, id_cliente,
+            tipo, moneda, monto, metodo_pago_id, id_tarjeta_cliente, observaciones, empresa_nombre)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+          [data.id_reserva, data.id_servicio, data.id_deuda, data.id_proveedor,
+           data.id_cliente, data.tipo, data.moneda, data.monto, data.metodo_pago_id,
+           null, data.observaciones, empresa]
+        );
+        pagosInsertados.push(pago.rows[0]);
+      }
+
+      if (data.id_deuda) {
+        await client.query(
+          'UPDATE deudas_servicio SET monto_pagado = monto_pagado + $1 WHERE id = $2',
+          [Math.abs(data.monto), data.id_deuda]
+        );
+      }
+
+      let svcName = 'Servicio General';
+      if (data.id_servicio) {
+         const svcRes = await client.query('SELECT tipo_servicio FROM reserva_servicios_detallados WHERE id = $1', [data.id_servicio]);
+         if (svcRes.rows.length) svcName = svcRes.rows[0].tipo_servicio;
+      }
+      concepto += `- ${svcName}: ${data.monto} ${data.moneda}\n`;
+
+      if (!sumatoriaMonedas[data.moneda]) { sumatoriaMonedas[data.moneda] = 0; }
+      sumatoriaMonedas[data.moneda] += parseFloat(data.monto);
+    }
+
+    // Generar un único recibo
+    const primerPago = pagosInsertados[0];
+    
+    // Obtener siguiente número de recibo
+    const ultimoRecibo = await client.query(
+      'SELECT COALESCE(MAX(numero_recibo), 0) AS ultimo FROM recibos WHERE empresa_nombre = $1',
+      [empresa]
+    );
+    const nuevoNumero = parseInt(ultimoRecibo.rows[0].ultimo, 10) + 1;
+
+    let nombreCliente = ''; let dniCliente = '';
+    if (idCliente) {
+      const clienteData = await client.query('SELECT nombre_completo, dni_pasaporte FROM clientes WHERE id = $1', [idCliente]);
+      if (clienteData.rows.length > 0) { nombreCliente = clienteData.rows[0].nombre_completo; dniCliente = clienteData.rows[0].dni_pasaporte || ''; }
+    }
+
+    const monedasUsadas = Object.keys(sumatoriaMonedas);
+    let reciboMoneda = monedasUsadas.length === 1 ? monedasUsadas[0] : 'MIXTO';
+    let reciboMonto = monedasUsadas.length === 1 ? sumatoriaMonedas[reciboMoneda] : 0;
+
+    const recibo = await client.query(
+      `INSERT INTO recibos (numero_recibo, id_pago, id_reserva, id_cliente, nombre_cliente,
+        dni_cliente, concepto, moneda, monto, metodo_pago, empresa_nombre)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [nuevoNumero, primerPago.id, idReserva, idCliente, nombreCliente,
+       dniCliente, concepto.trim(), reciboMoneda, reciboMonto, "Varios", empresa]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ mensaje: 'Pagos registrados', id_pago: primerPago.id }); // Returning id_pago just so the frontend doesn't crash if it expects it
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error registrando pagos múltiples:', err);
+    res.status(500).json({ error: 'Error al registrar pagos múltiples', detalle: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /api/pagos/:id — Eliminar movimiento permanentemente
 router.delete('/:id', async (req, res) => {
   const client = await pool.connect();

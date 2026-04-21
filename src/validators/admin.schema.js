@@ -5,18 +5,18 @@ const { z } = require('zod');
 
 const crearAgenciaSchema = z.object({
   empresa_nombre: z.string().min(1).max(100),
-  nombre_comercial: z.string().max(200).optional(),
-  titular: z.string().max(200).optional(),
-  cuit_cuil: z.string().max(30).optional(),
-  condicion_fiscal: z.enum(['MONOTRIBUTO', 'RESP_INSCRIPTO', 'EXENTO']).optional(),
-  domicilio: z.string().optional(),
-  telefono: z.string().max(50).optional(),
-  email: z.string().email().max(100).optional().or(z.literal('')),
-  pagina_web: z.string().max(200).optional(),
-  recibo_footer_legal: z.string().optional()
+  nombre_comercial: z.string().max(200).optional().nullable(),
+  titular: z.string().max(200).optional().nullable(),
+  cuit_cuil: z.string().max(30).optional().nullable(),
+  condicion_fiscal: z.enum(['MONOTRIBUTO', 'RESP_INSCRIPTO', 'EXENTO']).optional().nullable().or(z.literal('')),
+  domicilio: z.string().optional().nullable(),
+  telefono: z.string().max(50).optional().nullable(),
+  email: z.string().max(100).optional().nullable().or(z.literal('')),
+  pagina_web: z.string().max(200).optional().nullable().or(z.literal('')),
+  recibo_footer_legal: z.string().optional().nullable()
 });
 
-const actualizarAgenciaSchema = crearAgenciaSchema.partial().omit({ empresa_nombre: true });
+const actualizarAgenciaSchema = crearAgenciaSchema.partial().omit({ empresa_nombre: true }).strip();
 
 const reciboConfigSchema = z.object({
   primaryColor: z.string().optional(),

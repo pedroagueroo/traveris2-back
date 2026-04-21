@@ -78,6 +78,10 @@ app.use('/api/auth/login', loginLimiter);
 // ─── BODY PARSING ────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 
+// ─── ARCHIVOS ESTÁTICOS (uploads locales) ────────────────────────────────────
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
 // ─── RUTAS PÚBLICAS (sin JWT) ────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 

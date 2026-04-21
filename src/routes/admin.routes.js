@@ -17,6 +17,7 @@ const {
 
 const SALT_ROUNDS = 10;
 const uploadLogo = crearUpload('logos');
+const uploadBanner = crearUpload('banners');
 
 // ─── AGENCIAS ────────────────────────────────────────────────────────────────
 
@@ -106,23 +107,30 @@ router.get('/agencias/:empresa', async (req, res) => {
 router.put('/agencias/:empresa', async (req, res) => {
   const parsed = actualizarAgenciaSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.error('❌ Validación agencia fallida:', JSON.stringify(parsed.error.errors));
     return res.status(400).json({ error: 'Datos inválidos', detalles: parsed.error.errors });
   }
 
   const data = parsed.data;
+  // Filtrar solo campos que tienen valor definido (incluimos null para permitir borrar valores)
   const campos = Object.keys(data).filter(k => data[k] !== undefined);
 
   if (campos.length === 0) {
     return res.status(400).json({ error: 'No hay campos para actualizar' });
   }
 
+  // Convertir '' a null para campos opcionales
+  const values = campos.map(c => {
+    const v = data[c];
+    return (v === '' ? null : v);
+  });
+
   const sets = campos.map((c, i) => `${c} = $${i + 1}`);
   sets.push(`actualizada_en = CURRENT_TIMESTAMP`);
-  const values = campos.map(c => data[c]);
 
   try {
     const result = await pool.query(
-      `UPDATE agencias_config SET ${sets.join(', ')} WHERE empresa_nombre = $${valores_count(campos)} RETURNING *`,
+      `UPDATE agencias_config SET ${sets.join(', ')} WHERE empresa_nombre = $${campos.length + 1} RETURNING *`,
       [...values, req.params.empresa]
     );
     if (result.rows.length === 0) {
@@ -140,13 +148,22 @@ function valores_count(campos) {
 }
 
 // POST /api/admin/agencias/:empresa/logo — Upload logo a S3
-router.post('/agencias/:empresa/logo', uploadLogo.single('logo'), async (req, res) => {
+router.post('/agencias/:empresa/logo', (req, res, next) => {
+  uploadLogo.single('logo')(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer error (logo):', err.message);
+      return res.status(400).json({ error: 'Error al subir archivo: ' + err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No se recibió archivo' });
     }
 
-    const logoUrl = req.file.location || req.file.key;
+    const logoUrl = req.file.location || req.file.key || req.file.filename;
+    console.log('✅ Logo subido:', logoUrl);
 
     await pool.query(
       'UPDATE agencias_config SET logo_url = $1, actualizada_en = CURRENT_TIMESTAMP WHERE empresa_nombre = $2',
@@ -157,6 +174,36 @@ router.post('/agencias/:empresa/logo', uploadLogo.single('logo'), async (req, re
   } catch (err) {
     console.error('❌ Error subiendo logo:', err);
     res.status(500).json({ error: 'Error al subir logo' });
+  }
+});
+
+// POST /api/admin/agencias/:empresa/banner — Upload banner de recibo a S3
+router.post('/agencias/:empresa/banner', (req, res, next) => {
+  uploadBanner.single('banner')(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer error (banner):', err.message);
+      return res.status(400).json({ error: 'Error al subir archivo: ' + err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se recibió archivo' });
+    }
+
+    const bannerUrl = req.file.location || req.file.key || req.file.filename;
+    console.log('✅ Banner subido:', bannerUrl);
+
+    await pool.query(
+      'UPDATE agencias_config SET banner_url = $1, actualizada_en = CURRENT_TIMESTAMP WHERE empresa_nombre = $2',
+      [bannerUrl, req.params.empresa]
+    );
+
+    res.json({ banner_url: bannerUrl });
+  } catch (err) {
+    console.error('❌ Error subiendo banner:', err);
+    res.status(500).json({ error: 'Error al subir banner' });
   }
 });
 
