@@ -240,6 +240,10 @@ CREATE TABLE reserva_servicios_detallados (
     crucero_fecha_embarque DATE,
     crucero_fecha_desembarque DATE,
 
+    -- Fechas de pago generales
+    fecha_sena DATE,
+    fecha_saldar DATE,
+
     -- Financieros UNIFICADOS
     id_proveedor INTEGER REFERENCES proveedores(id),
     moneda VARCHAR(5) NOT NULL CHECK (moneda IN ('ARS', 'USD', 'EUR')),

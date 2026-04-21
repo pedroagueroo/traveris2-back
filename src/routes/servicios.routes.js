@@ -66,9 +66,10 @@ router.post('/', async (req, res) => {
         visa_pais, visa_tipo, visa_fecha_tramite, visa_nro_tramite,
         crucero_naviera, crucero_barco, crucero_itinerario, crucero_cabina,
         crucero_fecha_embarque, crucero_fecha_desembarque,
+        fecha_sena, fecha_saldar,
         id_proveedor, moneda, precio_cliente, costo_proveedor
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39
       ) RETURNING *`,
       [
         data.id_reserva, data.tipo_servicio, data.descripcion,
@@ -81,6 +82,7 @@ router.post('/', async (req, res) => {
         data.visa_pais, data.visa_tipo, data.visa_fecha_tramite, data.visa_nro_tramite,
         data.crucero_naviera, data.crucero_barco, data.crucero_itinerario, data.crucero_cabina,
         data.crucero_fecha_embarque, data.crucero_fecha_desembarque,
+        data.fecha_sena, data.fecha_saldar,
         data.id_proveedor, data.moneda, data.precio_cliente, data.costo_proveedor
       ]
     );

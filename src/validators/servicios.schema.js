@@ -48,6 +48,10 @@ const servicioSchema = z.object({
   crucero_fecha_embarque: z.string().optional().nullable(),
   crucero_fecha_desembarque: z.string().optional().nullable(),
 
+  // Fechas de pago generales
+  fecha_sena: z.string().optional().nullable(),
+  fecha_saldar: z.string().optional().nullable(),
+
   // Financieros
   id_proveedor: z.number().int().positive().optional().nullable(),
   moneda: z.enum(['ARS', 'USD', 'EUR']),
