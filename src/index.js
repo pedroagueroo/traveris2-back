@@ -142,6 +142,18 @@ async function iniciar() {
   // Seed admin inicial
   await seedAdminInicial();
 
+  // Auto-migrate: agregar columnas nuevas si no existen
+  try {
+    await pool.query(`
+      ALTER TABLE reserva_servicios_detallados
+        ADD COLUMN IF NOT EXISTS fecha_sena DATE,
+        ADD COLUMN IF NOT EXISTS fecha_saldar DATE
+    `);
+    console.log('✅ Columnas fecha_sena/fecha_saldar verificadas');
+  } catch (e) {
+    console.log('ℹ️  Migration skip:', e.message);
+  }
+
   // Seed tester account for demo purposes
   try {
     const bcrypt = require('bcrypt');
