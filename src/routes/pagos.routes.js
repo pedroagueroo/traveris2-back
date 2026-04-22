@@ -427,12 +427,17 @@ router.post('/multiples', async (req, res) => {
       }
 
       // Coerción de tipos — Angular envía strings desde inputs de formulario
-      if (rawData.monto !== undefined && rawData.monto !== null) rawData.monto = parseFloat(rawData.monto);
-      if (rawData.metodo_pago_id !== undefined && rawData.metodo_pago_id !== null) rawData.metodo_pago_id = parseInt(rawData.metodo_pago_id, 10) || null;
-      if (rawData.id_reserva !== undefined && rawData.id_reserva !== null) rawData.id_reserva = parseInt(rawData.id_reserva, 10) || null;
-      if (rawData.id_servicio !== undefined && rawData.id_servicio !== null) rawData.id_servicio = parseInt(rawData.id_servicio, 10) || null;
-      if (rawData.id_deuda !== undefined && rawData.id_deuda !== null) rawData.id_deuda = parseInt(rawData.id_deuda, 10) || null;
-      if (rawData.id_cliente !== undefined && rawData.id_cliente !== null) rawData.id_cliente = parseInt(rawData.id_cliente, 10) || null;
+      const coerceId = (val) => {
+        const n = Number(val);
+        return Number.isInteger(n) && n > 0 ? n : null;
+      };
+
+      rawData.monto          = parseFloat(rawData.monto) || 0;
+      rawData.metodo_pago_id = coerceId(rawData.metodo_pago_id);
+      rawData.id_reserva     = coerceId(rawData.id_reserva);
+      rawData.id_servicio    = coerceId(rawData.id_servicio);
+      rawData.id_deuda       = coerceId(rawData.id_deuda);
+      rawData.id_cliente     = coerceId(rawData.id_cliente);
 
       const parsed = pagoSchema.safeParse(rawData);
       if (!parsed.success) {

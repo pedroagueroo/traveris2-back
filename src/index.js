@@ -147,7 +147,11 @@ async function iniciar() {
     await pool.query(`
       ALTER TABLE reserva_servicios_detallados
         ADD COLUMN IF NOT EXISTS fecha_sena DATE,
-        ADD COLUMN IF NOT EXISTS fecha_saldar DATE
+        ADD COLUMN IF NOT EXISTS fecha_saldar DATE;
+        
+      ALTER TABLE recibos DROP CONSTRAINT IF EXISTS recibos_moneda_check;
+      ALTER TABLE recibos DROP CONSTRAINT IF EXISTS recibos_moneda_check1;
+      ALTER TABLE recibos ADD CONSTRAINT recibos_moneda_check CHECK (moneda IN ('ARS', 'USD', 'EUR', 'MIXTO'));
     `);
     console.log('✅ Columnas fecha_sena/fecha_saldar verificadas');
   } catch (e) {
