@@ -26,6 +26,16 @@ const pagoSchema = z.object({
     expiracion: z.string().max(10),
     cvv: z.string().max(4).optional()
   }).optional().nullable()
+}).superRefine((data, ctx) => {
+  // metodo_pago_id es obligatorio para pagos normales (no conversiones/ajustes)
+  const tiposRequierenMetodo = ['COBRO_CLIENTE', 'PAGO_PROVEEDOR', 'INGRESO_GENERAL', 'EGRESO_GENERAL'];
+  if (tiposRequierenMetodo.includes(data.tipo) && !data.metodo_pago_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Debe seleccionar un método de pago',
+      path: ['metodo_pago_id']
+    });
+  }
 });
 
 const conversionSchema = z.object({
