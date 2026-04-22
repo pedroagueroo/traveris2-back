@@ -65,6 +65,7 @@ router.get('/detalle/:moneda', async (req, res) => {
     const empresa = req.usuario.empresa_nombre;
     const moneda = req.params.moneda.toUpperCase();
 
+    // Pagos asignados a un método de pago
     const result = await pool.query(
       `SELECT
         mp.id AS metodo_id,
@@ -87,7 +88,36 @@ router.get('/detalle/:moneda', async (req, res) => {
       [empresa, moneda]
     );
 
-    res.json(result.rows);
+    // Pagos SIN método asignado (metodo_pago_id IS NULL)
+    const sinMetodo = await pool.query(
+      `SELECT
+        COALESCE(SUM(CASE
+          WHEN tipo = 'COBRO_CLIENTE' AND id_tarjeta_cliente IS NULL THEN monto
+          WHEN tipo = 'PAGO_PROVEEDOR' AND id_tarjeta_cliente IS NULL THEN -monto
+          WHEN tipo = 'INGRESO_GENERAL' THEN monto
+          WHEN tipo = 'EGRESO_GENERAL' THEN -monto
+          WHEN tipo = 'CONVERSION' THEN monto
+          WHEN tipo = 'AJUSTE_TARJETA' THEN monto
+          ELSE 0
+        END), 0) AS saldo
+       FROM pagos
+       WHERE empresa_nombre = $1 AND moneda = $2 AND anulado = FALSE
+         AND metodo_pago_id IS NULL`,
+      [empresa, moneda]
+    );
+
+    const rows = result.rows;
+    const saldoSinMetodo = parseFloat(sinMetodo.rows[0]?.saldo || 0);
+    if (saldoSinMetodo !== 0) {
+      rows.push({
+        metodo_id: null,
+        metodo_nombre: 'SIN MÉTODO',
+        metodo_tipo: 'OTROS',
+        saldo: saldoSinMetodo
+      });
+    }
+
+    res.json(rows);
   } catch (err) {
     console.error('❌ Error detalle caja:', err);
     res.status(500).json({ error: 'Error al obtener detalle de caja' });
