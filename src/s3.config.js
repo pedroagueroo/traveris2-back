@@ -11,7 +11,7 @@ let uploadFactory;
 try {
   const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
   const multerS3 = require('multer-s3');
-  const { v4: uuidv4 } = require('uuid');
+  const crypto = require('crypto');
 
   const s3 = new S3Client({
     region: process.env.AWS_REGION || 'sa-east-1',
@@ -41,7 +41,7 @@ try {
         contentType: multerS3.AUTO_CONTENT_TYPE,
         key: (req, file, cb) => {
           const ext = path.extname(file.originalname);
-          const nombre = `${carpeta}/${uuidv4()}${ext}`;
+          const nombre = `${carpeta}/${crypto.randomUUID()}${ext}`;
           cb(null, nombre);
         }
       }),
