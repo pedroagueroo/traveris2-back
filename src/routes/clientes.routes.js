@@ -122,7 +122,13 @@ router.post('/', async (req, res) => {
 
 // PUT /api/clientes/:id — Actualizar
 router.put('/:id', async (req, res) => {
-  const parsed = clienteUpdateSchema.safeParse(req.body);
+  const body = { ...req.body };
+  for (const key of Object.keys(body)) {
+    if (typeof body[key] === 'string' && body[key].trim() === '') {
+      body[key] = null;
+    }
+  }
+  const parsed = clienteUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Datos inválidos', detalles: parsed.error.errors });
   }

@@ -1,5 +1,5 @@
 // ============================================================================
-// RESERVAS ROUTES — CRUD con paginación + pasajeros + vuelos + archivos
+// RESERVAS ROUTES — CRUD con paginación + pasajeros + archivos
 // ============================================================================
 const express = require('express');
 const router = express.Router();
@@ -138,12 +138,6 @@ router.get('/:id', async (req, res) => {
       [id]
     );
 
-    // Vuelos
-    const vuelos = await pool.query(
-      'SELECT * FROM reserva_vuelos WHERE id_reserva = $1 ORDER BY fecha_salida ASC',
-      [id]
-    );
-
     // Servicios con proveedor
     const servicios = await pool.query(
       `SELECT s.*, p.nombre_comercial AS proveedor_nombre
@@ -173,7 +167,6 @@ router.get('/:id', async (req, res) => {
     res.json({
       ...reserva.rows[0],
       pasajeros: pasajeros.rows,
-      vuelos: vuelos.rows,
       servicios: servicios.rows,
       archivos: archivos.rows,
       tarjetas: tarjetas.rows
@@ -236,19 +229,6 @@ router.post('/', async (req, res) => {
          VALUES ($1, $2, TRUE)`,
         [idReserva, data.id_titular]
       );
-    }
-
-    // 3. Insertar vuelos
-    if (data.vuelos && data.vuelos.length > 0) {
-      for (const v of data.vuelos) {
-        await client.query(
-          `INSERT INTO reserva_vuelos (id_reserva, aerolinea, nro_vuelo, origen, destino,
-            fecha_salida, fecha_llegada, clase, codigo_reserva, observaciones)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [idReserva, v.aerolinea, v.nro_vuelo, v.origen, v.destino,
-           v.fecha_salida, v.fecha_llegada, v.clase, v.codigo_reserva, v.observaciones]
-        );
-      }
     }
 
     await client.query('COMMIT');
@@ -319,20 +299,6 @@ router.put('/:id', async (req, res) => {
         await client.query(
           'INSERT INTO reserva_pasajeros (id_reserva, id_cliente, es_titular) VALUES ($1, $2, $3)',
           [id, p.id_cliente, p.es_titular || false]
-        );
-      }
-    }
-
-    // Actualizar vuelos (si vienen) — se reinsertan porque no tienen deudas vinculadas
-    if (data.vuelos !== undefined) {
-      await client.query('DELETE FROM reserva_vuelos WHERE id_reserva = $1', [id]);
-      for (const v of data.vuelos) {
-        await client.query(
-          `INSERT INTO reserva_vuelos (id_reserva, aerolinea, nro_vuelo, origen, destino,
-            fecha_salida, fecha_llegada, clase, codigo_reserva, observaciones)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [id, v.aerolinea, v.nro_vuelo, v.origen, v.destino,
-           v.fecha_salida, v.fecha_llegada, v.clase, v.codigo_reserva, v.observaciones]
         );
       }
     }

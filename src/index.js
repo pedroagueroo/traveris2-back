@@ -27,6 +27,9 @@ const tarjetasRoutes = require('./routes/tarjetas.routes');
 const recibosRoutes = require('./routes/recibos.routes');
 const cajaRoutes = require('./routes/caja.routes');
 const importClientesRoutes = require('./routes/importClientes.routes');
+const incidenciasRoutes = require('./routes/incidencias.routes');
+const itemsRoutes = require('./routes/items.routes');
+const tarjetasGuardadasRoutes = require('./routes/tarjetasGuardadas.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -104,6 +107,31 @@ app.use('/api/tarjetas', verificarToken, resolverEmpresa, tarjetasRoutes);
 app.use('/api/recibos', verificarToken, resolverEmpresa, recibosRoutes);
 app.use('/api/caja', verificarToken, resolverEmpresa, cajaRoutes);
 app.use('/api/import-clientes', verificarToken, resolverEmpresa, importClientesRoutes);
+app.use('/api/incidencias', verificarToken, resolverEmpresa, incidenciasRoutes);
+app.use('/api/items', verificarToken, resolverEmpresa, itemsRoutes);
+app.use('/api/tarjetas-guardadas', verificarToken, resolverEmpresa, tarjetasGuardadasRoutes);
+
+app.get('/api/aeropuertos', verificarToken, async (req, res) => {
+  const q = req.query.q || '';
+  if (q.length < 2) return res.json([]);
+  try {
+    const result = await pool.query(
+      `SELECT codigo_iata, nombre_ciudad, pais 
+       FROM aeropuertos_iata
+       WHERE codigo_iata ILIKE $1 
+          OR nombre_ciudad ILIKE $1
+          OR pais ILIKE $1
+       ORDER BY 
+         CASE WHEN codigo_iata ILIKE $2 THEN 0 ELSE 1 END,
+         nombre_ciudad ASC
+       LIMIT 8`,
+      [`%${q}%`, `${q}%`]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Error buscando aeropuertos' });
+  }
+});
 
 // ─── RUTA DE PRUEBA ─────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -201,6 +229,9 @@ async function iniciar() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Traveris Pro v2 escuchando en puerto ${PORT}`);
   });
+
+  const { iniciarJob } = require('./jobs/alertasVencimiento');
+  iniciarJob();
 }
 
 iniciar();

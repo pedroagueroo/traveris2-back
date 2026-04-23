@@ -16,17 +16,6 @@ const reservaSchema = z.object({
   pasajeros: z.array(z.object({
     id_cliente: z.number().int().positive(),
     es_titular: z.boolean().optional()
-  })).optional(),
-  vuelos: z.array(z.object({
-    aerolinea: z.string().max(100).optional().nullable(),
-    nro_vuelo: z.string().max(50).optional().nullable(),
-    origen: z.string().max(100).optional().nullable(),
-    destino: z.string().max(100).optional().nullable(),
-    fecha_salida: z.string().optional().nullable(),
-    fecha_llegada: z.string().optional().nullable(),
-    clase: z.string().max(50).optional().nullable(),
-    codigo_reserva: z.string().max(50).optional().nullable(),
-    observaciones: z.string().optional().nullable()
   })).optional()
 });
 

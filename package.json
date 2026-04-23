@@ -9,7 +9,12 @@
     "migrate": "node src/migrate.js",
     "seed": "node src/seeds/adminInicial.js"
   },
-  "keywords": ["traveris", "travel", "agency", "saas"],
+  "keywords": [
+    "traveris",
+    "travel",
+    "agency",
+    "saas"
+  ],
   "author": "Pedro Agüero",
   "license": "ISC",
   "dependencies": {
@@ -23,6 +28,7 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
     "multer-s3": "^3.0.1",
+    "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
     "nodemailer": "^8.0.1",
     "pg": "^8.18.0",
