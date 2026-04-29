@@ -4,6 +4,37 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'sa-east-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  }
+});
+
+async function getImageBase64FromS3(url) {
+  try {
+    const urlObj = new URL(url);
+    const bucket = urlObj.hostname.split('.')[0];
+    const key = decodeURIComponent(urlObj.pathname.substring(1));
+
+    const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+    const response = await s3Client.send(command);
+
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    const mime = response.ContentType || 'image/jpeg';
+    return `data:${mime};base64,${buffer.toString('base64')}`;
+  } catch (e) {
+    console.warn('❌ Error cargando imagen de S3:', e.message);
+    return null;
+  }
+}
 
 // GET /api/recibos/reserva/:id — Recibos de una reserva
 router.get('/reserva/:id', async (req, res) => {
@@ -55,10 +86,23 @@ router.get('/:id', async (req, res) => {
       reservaData = reserva.rows[0] || null;
     }
 
+    let bannerBase64 = null;
+    let logoBase64 = null;
+
+    if (agencia.rows[0]?.banner_url) {
+      bannerBase64 = await getImageBase64FromS3(agencia.rows[0].banner_url);
+    }
+
+    if (agencia.rows[0]?.logo_url) {
+      logoBase64 = await getImageBase64FromS3(agencia.rows[0].logo_url);
+    }
+
     res.json({
       recibo: recibo.rows[0],
       agencia: agencia.rows[0] || null,
-      reserva: reservaData
+      reserva: reservaData,
+      bannerBase64,
+      logoBase64
     });
   } catch (err) {
     console.error('❌ Error obteniendo recibo:', err);

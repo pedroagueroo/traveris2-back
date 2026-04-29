@@ -13,9 +13,10 @@ const crearAgenciaSchema = z.object({
   telefono: z.string().max(50).optional().nullable(),
   email: z.string().max(100).optional().nullable().or(z.literal('')),
   pagina_web: z.string().max(200).optional().nullable().or(z.literal('')),
-  recibo_footer_legal: z.string().optional().nullable()
+  recibo_footer_legal: z.string().optional().nullable(),
+  logo_url: z.string().nullable().optional(),
+  banner_url: z.string().nullable().optional()
 });
-
 const actualizarAgenciaSchema = crearAgenciaSchema.partial().omit({ empresa_nombre: true }).strip();
 
 const reciboConfigSchema = z.object({

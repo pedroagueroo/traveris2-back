@@ -194,14 +194,14 @@ async function iniciar() {
       const hash = await bcrypt.hash('tester123', 10);
       await pool.query(
         `INSERT INTO usuarios (nombre_usuario, password_hash, rol, empresa_nombre, activo)
-         VALUES ('tester', $1, 'EMPRESA', 'pedro', true)`,
+         VALUES ('tester', $1, 'EMPRESA', 'Viajes Pedro', true)`,
         [hash]
       );
       console.log('✅ Usuario tester de prueba creado.');
     }
 
     // Seed payment methods for tester empresa if missing
-    const mpCount = await pool.query("SELECT COUNT(*) FROM metodos_pago WHERE empresa_nombre = 'pedro'");
+    const mpCount = await pool.query("SELECT COUNT(*) FROM metodos_pago WHERE empresa_nombre = 'Viajes Pedro'");
     if (parseInt(mpCount.rows[0].count) === 0) {
       const metodos = [
         ['EFECTIVO', 'ARS', 'EFECTIVO'],
@@ -216,7 +216,7 @@ async function iniciar() {
       ];
       for (const [nombre, moneda, tipo] of metodos) {
         await pool.query(
-          `INSERT INTO metodos_pago (nombre, moneda, tipo, activo, empresa_nombre) VALUES ($1, $2, $3, true, 'pedro')`,
+          `INSERT INTO metodos_pago (nombre, moneda, tipo, activo, empresa_nombre) VALUES ($1, $2, $3, true, 'Viajes Pedro')`,
           [nombre, moneda, tipo]
         );
       }
